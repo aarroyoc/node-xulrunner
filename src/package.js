@@ -1,13 +1,15 @@
 var mozdownload=require("mozilla-download");
 var Q=require("q");
 var http=require("follow-redirects").http;
-var fs=require("fs");
+var fs=require("fs.extra");
 var mkdirp=require("mkdirp");
 var statusBar=require("status-bar");
 var path = require ("path");
 var Decompress=require("decompress");
 var rimraf=require("rimraf");
 var winston=require("winston");
+var Liquid=require("liquid-node");
+var engine=new Liquid.Engine();
 
 
 function download(url,dest,callback){
@@ -137,6 +139,55 @@ function extractNode(promise,options)
 	return deferred.promise;
 }
 
+function useTemplate(options) {
+	winston.info("Using template");
+	mkdirp.sync("build");
+	var templateOptions={
+		name: options.name,
+		vendor: options.vendor,
+		version: options.appVersion,
+		buildid: options.buildId,
+		id: options.id,
+		copyright: options.copyright,
+		width: options.width,
+		height: options.height
+	};
+	var appIniTemplate=fs.readFileSync("template/application.ini");
+	var appIni=fs.createWriteStream("build/application.ini");
+	engine.parseAndRender(appIniTemplate,templateOptions)
+	.then(function(result){
+		appIni.on("open",function(){
+			appIni.write(result);
+			appIni.end();
+		});
+	});
+	fs.copy("template/chrome.manifest","build/chrome.manifest");
+	fs.copy("template/chrome/chrome.manifest","build/chrome/chrome.manifest");
+	mkdirp.sync("build/defaults/preferences");
+	fs.copy("template/defaults/preferences/prefs.js","build/defaults/preferences/prefs.js");
+	mkdirp.sync("build/chrome/content");
+	fs.copy("template/chrome/content/app.js","build/chrome/content/app.js");
+	mkdirp.sync("build/chrome/content/runtimes");
+	fs.copy("runtimes/node","build/chrome/content/runtimes/node",function(){
+		fs.chmodSync("build/chrome/content/runtimes/node","777");
+	});
+	fs.copyRecursive("runtimes/xul-runner-linux-i686","build/xulrunner",function(){});
+	fs.copy("runtimes/xul-runner-linux-i686/xulrunner-stub","build/app",function(){
+		fs.chmodSync("build/app","777");
+	});
+	fs.copyRecursive("app","build/chrome/content/app",function(){});
+	//MAIN.XUL is TEMPLATE
+	var mainXulTemplate=fs.readFileSync("template/chrome/content/main.xul");
+	var mainXul=fs.createWriteStream("build/chrome/content/main.xul");
+	engine.parseAndRender(mainXulTemplate,templateOptions)
+	.then(function(result){
+		mainXul.on("open",function(){
+			mainXul.write(result);
+			mainXul.end();
+		});
+	});
+}
+
 function packageApp(options)
 {
 	winston.info("Node XULRunner 0.1");
@@ -144,6 +195,7 @@ function packageApp(options)
 	fs.exists("./runtimes/ok",function(exist){
 		if(exist){
 			winston.info("Setup OK");
+			useTemplate(options);
 		}else{
 			winston.warn("Creating setup");
 			mkdirp.sync("runtimes");
@@ -160,23 +212,12 @@ function packageApp(options)
 				return extractNode(options);
 			}).done();
 			
-			/*.then(function(){
-				//downloadNode(options);
-			})
-			.then(function(){
-				//extractNode(options);
-			})
-			.then(function(){
-				var ok=fs.createWriteStream("./runtimes/ok");
-				ok.once("open",function(fd){
-					ok.write("Setup OK\r\n");
-					ok.end();
-				});
-			})
-			.catch(function(error){
-				winston.error(error);
-			})
-			.done();*/
+			var ok=fs.createWriteStream("./runtimes/ok");
+			ok.on("open",function(fd){
+				ok.write("Setup OK\r\n");
+				ok.end();
+			});
+			
 		}
 	});
 }

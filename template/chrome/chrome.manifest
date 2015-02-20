@@ -1,0 +1,4 @@
+content node-xulrunner content/
+content branding branding/
+locale branding en-US locale/branding/
+locale node-xulrunner locale/en-US/
