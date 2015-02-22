@@ -4,7 +4,7 @@
   "description": "Run HTML5 and Node.js applications with Gecko",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Test\""
+    "test": "node test.js && node test.js"
   },
   "repository": {
     "type": "git",
