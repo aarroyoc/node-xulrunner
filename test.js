@@ -1,7 +1,7 @@
 var xul=require("./index.js");
 
 var options={
-	os: "linux-i686",
+	os: "win32",
 	version: "35.0.1",
 	name: "Testing",
 	vendor: "Adrián Arroyo",

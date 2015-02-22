@@ -34,11 +34,19 @@ function download(url,dest,callback){
 }
 
 function downloadRuntime(options) {
-	var url="http://releases.mozilla.org/pub/mozilla.org/xulrunner/releases/35.0.1/runtimes/xulrunner-35.0.1.en-US.linux-i686.tar.bz2";
+	var url="http://releases.mozilla.org/pub/mozilla.org/xulrunner/releases/"+options.version+"/runtimes/xulrunner-"+options.version+".en-US."+options.os;
+	if(options.os=="win32")
+	{
+		url+=".zip";
+		var file=fs.createWriteStream("./runtimes/xul-runner.zip");
+	}
+	else{
+		url+=".tar.bz2";
+		var file=fs.createWriteStream("./runtimes/xul-runner.tar.bz2");
+	}
 	var defer=Q.defer();
 	var bar;
 	
-	var file=fs.createWriteStream("./runtimes/xul-runner.tar.bz2");
 	var request=http.get(url,function(response){
 		bar = statusBar.create ({ total: response.headers["content-length"] }).on ("render", function (stats){
 			process.stdout.write (
@@ -70,7 +78,7 @@ function extractRuntime(options)
 		var file="./runtimes/xul-runner.zip";
 		var decompress=new Decompress()
 			.src(file)
-			.dest("./runtimes/xul-runner-win32")
+			.dest("./runtimes/xul-runner")
 			.use(Decompress.zip({strip: 1}));
 		decompress.run(function(err,files){
 			winston.info("Extracted XUL Runner");
@@ -82,7 +90,7 @@ function extractRuntime(options)
 		var file="./runtimes/xul-runner.tar.bz2";
 		var decompress=new Decompress({mode: "777"})
 			.src(file)
-			.dest("./runtimes/xul-runner-"+options.os)
+			.dest("./runtimes/xul-runner")
 			.use(Decompress.tarbz2({strip: 1}));
 		decompress.run(function(err,files){
 			winston.info("Extracted XUL Runner");
@@ -96,10 +104,20 @@ function extractRuntime(options)
 function downloadNode(options)
 {
 	var defer=Q.defer();
-	var url="http://nodejs.org/dist/v0.12.0/node-v0.12.0-linux-x86.tar.gz";
+	
+	switch(options.os){
+		case "linux-i686": var url="http://nodejs.org/dist/v0.12.0/node-v0.12.0-linux-x86.tar.gz";break;
+		case "linux-x86_64": var url="http://nodejs.org/dist/v0.12.0/node-v0.12.0-linux-x64.tar.gz";break;
+		case "mac": var url="http://nodejs.org/dist/v0.12.0/node-v0.12.0-darwin-x64.tar.gz"; break; 
+		case "win32": var url="http://nodejs.org/dist/v0.12.0/node.exe";break;
+	}
 	var bar;
 	
-	var file=fs.createWriteStream("./runtimes/node.tar.gz");
+	if(options.os=="win32"){
+		var file=fs.createWriteStream("./runtimes/node.exe");
+	}else{
+		var file=fs.createWriteStream("./runtimes/node.tar.gz");
+	}
 	var request=http.get(url,function(response){
 		bar = statusBar.create ({ total: response.headers["content-length"] }).on ("render", function (stats){
 			process.stdout.write (
@@ -121,21 +139,26 @@ function downloadNode(options)
 	
 	return defer.promise;
 }
-function extractNode(promise,options)
+function extractNode(options)
 {
 	var deferred=Q.defer();
 	winston.info("Extracting Node.js");
-	var file="./runtimes/node.tar.gz";
-	var decompress=new Decompress({mode: "777"})
-		.src(file)
-		.dest("./runtimes/node-tmp")
-		.use(Decompress.targz({strip: 1}));
-	decompress.run(function(err,files){
-		winston.info("Extracted Node.js");
-		fs.createReadStream("./runtimes/node-tmp/bin/node").pipe(fs.createWriteStream("./runtimes/node",{mode: 0777}));
-		rimraf.sync("./runtimes/node-tmp");
+	if(options.os=="win32")
+	{
 		deferred.resolve();
-	});
+	}else{
+		var file="./runtimes/node.tar.gz";
+		var decompress=new Decompress({mode: "777"})
+			.src(file)
+			.dest("./runtimes/node-tmp")
+			.use(Decompress.targz({strip: 1}));
+		decompress.run(function(err,files){
+			winston.info("Extracted Node.js");
+			fs.createReadStream("./runtimes/node-tmp/bin/node").pipe(fs.createWriteStream("./runtimes/node",{mode: 0777}));
+			rimraf.sync("./runtimes/node-tmp");
+			deferred.resolve();
+		});
+	}
 	return deferred.promise;
 }
 
@@ -168,13 +191,19 @@ function useTemplate(options) {
 	mkdirp.sync("build/chrome/content");
 	fs.copy("template/chrome/content/app.js","build/chrome/content/app.js");
 	mkdirp.sync("build/chrome/content/runtimes");
-	fs.copy("runtimes/node","build/chrome/content/runtimes/node",function(){
-		fs.chmodSync("build/chrome/content/runtimes/node","777");
-	});
-	fs.copyRecursive("runtimes/xul-runner-linux-i686","build/xulrunner",function(){});
-	fs.copy("runtimes/xul-runner-linux-i686/xulrunner-stub","build/app",function(){
-		fs.chmodSync("build/app","777");
-	});
+	if(options.os!="win32")
+		fs.copy("runtimes/node","build/chrome/content/runtimes/node",function(){
+			fs.chmodSync("build/chrome/content/runtimes/node","777");
+		});
+	else
+		fs.copy("runtimes/node.exe","build/chrome/content/runtimes/node.exe");
+	fs.copyRecursive("runtimes/xul-runner","build/xulrunner",function(){});
+	if(options.os!="win32")
+		fs.copy("runtimes/xul-runner/xulrunner-stub","build/app",function(){
+			fs.chmodSync("build/app","777");
+		});
+	else
+		fs.copy("runtimes/xul-runner/xulrunner-stub.exe","build/app.exe");
 	fs.copyRecursive("app","build/chrome/content/app",function(){});
 	//MAIN.XUL is TEMPLATE
 	var mainXulTemplate=fs.readFileSync("template/chrome/content/main.xul");
