@@ -31,7 +31,7 @@
     "mozilla-download": "~1.1.1",
     "q": "~1.1.2",
     "rimraf": "~2.5.1",
-    "status-bar": "~2.0.2",
+    "status-bar": "~2.0.3",
     "winston": "~2.2.0"
   }
 }
